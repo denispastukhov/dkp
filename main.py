@@ -18,19 +18,39 @@ bot = commands.Bot(command_prefix='dkp!')
 LOGGER = logger
 
 @bot.command(name='add_points',help='adds points to members')
-async def nine_nine(ctx, *, args):
+async def add_points(ctx, period: int, *args):
     print(args)
+    server_id = db.select_one_row_dict_cursor(sql_scripts.select_guilds, ctx.guild.id)
+    additor = db.select_one_row_dict_cursor(sql_scripts.select_users, ctx.guild.id, ctx.author.id)
+    validation_id_response = db.select_one_row_dict_cursor(sql_scripts.select_validation_id, period)
+    if validation_id_response[0] is not None:
+        validation_id = validation_id_response[0] + 1
+    else:
+        validation_id = 1
+    #TODO check period
     user_dict = {}
-    rows = args.split('\n')
-    print (rows)
-    for r in rows:
-        temp = r.split(' ')
-        user_dict[temp[0]] = temp[1]
+    for x in range (0,len(args),2):
+            user_dict[args[x]]=int(args[x+1])
     print (user_dict)
+    for key, value in user_dict.items():
+        script = f"""INSERT INTO public.user_points(user_id, period_id, validated, add_date, points, additor,validation_id)
+	                VALUES ((select id from public.users where server_id = {server_id['id']} and username = '{key}'), 
+                    {period}, 
+                    false, 
+                    now(),
+                    {value}, 
+                    {additor['id']},
+                    {validation_id});"""
+        db.update_rows(script,{})
+    # rows = args.split('\n')
+    # print (rows)
+    # for r in rows:
+    #     temp = r.split(' ')
+    #     user_dict[temp[0]] = temp[1]
+    # print (user_dict)
 
     #await ctx.send(response)
     
-#TODO rework as command
 @bot.command(name='regsrv',help='register current server in bot database')  
 async def reg_server(ctx):
     registered_server = db.select_rows_dict_cursor(sql_scripts.select_guilds, ctx.guild.id)
@@ -75,11 +95,36 @@ async def get_periods(ctx, *status):
     elif len(status)==0:
         script += ''
     periods = db.select_rows_dict_cursor(script, ctx.guild.id)
-    colnames = db.select_column_headers('public.payment_periods')
     response = ''
     for p in periods:
-        response += f"ID = {p['id']} | START = {(p['open_date']).strftime('%d-%m-%y %H:%M')}\n"
+        response += f"ID = {p['id']} | START = {(p['open_date']).strftime('%d-%m-%y %H:%M')} | END = {(p['close_date']).strftime('%d-%m-%y %H:%M') if p['close_date'] is not None else 'NONE'} | PAYMENT = {p['payment']}ISK\n"
     await ctx.send (response)
+
+@bot.command(name="close_period", help="closes reporting period")
+async def close_period(ctx, id: int, payment: int):
+    script = sql_scripts.select_periods
+    script += 'and id = %s'
+    check = db.select_one_row_dict_cursor(script,ctx.guild.id,id)
+    print (check)
+    if check is None:
+        await ctx.send(f'Period {id} not found')
+        return
+    elif check['close_date'] is not None:
+        await ctx.send(f'Period {id} is already closed')
+        return
+    else:
+        db.update_rows(sql_scripts.update_close_period, payment, id)
+        await ctx.send(f'Period {id} closed')
+    #TODO show salary
+
+    
+
+@close_period.error
+async def close_period_error(ctx, error):
+    if isinstance(error, commands.BadArgument):
+        await ctx.send('Unexpected agruments.')
+    
+
         
 
 

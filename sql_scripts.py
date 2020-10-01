@@ -15,6 +15,10 @@ insert_active_period = """INSERT INTO public.payment_periods(
 	open_date, payment, server_id, close_date)
 	VALUES ( now(), null, (select id from public.servers where discord_id = %s), null);"""
 select_periods = "select * from public.payment_periods where server_id = (select id from public.servers where discord_id = %s)"
+update_close_period = """UPDATE public.payment_periods
+	SET payment=%s, close_date=now()
+	WHERE id = %s;"""
+select_validation_id = "select max(validation_id) from public.user_points where period_id = %s"
 
 # init_scripts = 
 # CREATE TABLE public.servers
